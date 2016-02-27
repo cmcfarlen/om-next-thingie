@@ -21,6 +21,11 @@
   (println "Adding item " item-id " to " item-set)
   (update-in item-set [:item.set/items] conj [:item/by-id item-id]))
 
+(defn remove-item
+  [item-set item-id]
+  (update-in item-set [:item.set/items] (fn [items]
+                                          (into [] (remove #(= % [:item/by-id item-id])) items))))
+
 (defmulti parser-read om/dispatch)
 
 (defmethod parser-read :default
@@ -75,6 +80,13 @@
    (fn []
      (swap! state update-in ref add-item id))})
 
+(defmethod parser-mutate 'item.set/remove-item
+  [{:keys [state ref] :as e} k {:keys [:item/id] :as new-props}]
+  (println "remove-item " new-props " ref " ref)
+  {:action
+   (fn []
+     (swap! state update-in ref remove-item id))})
+
 (defmethod parser-mutate 'item/update-new
   [{:keys [state]} k {:keys [value]}]
   {:action
@@ -92,9 +104,9 @@
               {:item/id 2 :item/name "Tammy"}
               {:item/id 3 :item/name "Copper"}]
    :item/sets [{:item.set/name "Set 1"
-                :item.set/items [{:item/id 1 :item/name "Chris"} {:item/id 2 :item/name "Tammy"}]}
+                :item.set/items [{:item/id 1} {:item/id 2}]}
                {:item.set/name "Set 2"
-                :item.set/items [{:item/id 3 :item/name "Copper"} {:item/id 1 :item/name "Chris"}]}]})
+                :item.set/items [{:item/id 3} {:item/id 1}]}]})
 
 (defonce reconciler
   (om/reconciler
@@ -111,8 +123,11 @@
   Object
   (render [this]
     (println "rendering item: " (-> this om/props :item/id))
-    (let [props (om/props this)]
-      (html [:li (str (:item/name props) "(" (:item/id props) ")")]))))
+    (let [props (om/props this)
+          {:keys [remove]} (om/get-computed this)]
+      (html [:li (str (:item/name props) "(" (:item/id props) ")")
+             (if remove
+               [:button {:on-click remove} "Remove"])]))))
 
 (def item (om/factory Item {:keyfn :item/id}))
 
@@ -130,16 +145,18 @@
           set-ids (into #{} (map :item/id items))
           all-ids (into #{} (map :item/id all))
           missing-ids (clojure.set/difference all-ids set-ids)
-          missing (filter #(missing-ids (:item/id %)) all)
-          ]
+          missing (filter #(missing-ids (:item/id %)) all)]
       (html [:li
              [:h3 name]
              [:ul
-              (map item items)
+              (map #(item (om/computed %
+                                       {:remove (fn [e]
+                                                  (let [id (:item/id %)]
+                                                    (om/transact! this `[(item.set/remove-item {:item/id ~id})])))}
+                                       )) items)
               [:li [:select {:ref "select"}
                     (map (fn [o] [:option {:value (:item/id o)
-                                           :key (:item/id o)
-                                           } (:item/name o)]) missing)]
+                                           :key (:item/id o)} (:item/name o)]) missing)]
                [:button {:on-click (fn [_]
                                      (let [new-id (cljs.reader/read-string (.. (om/react-ref this "select") -value))]
                                        (om/transact! this `[(item.set/add-item {:item/id ~new-id})])))} "Add Item"]]]]))))
