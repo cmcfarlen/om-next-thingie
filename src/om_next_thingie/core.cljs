@@ -1,5 +1,6 @@
 (ns om-next-thingie.core
   (:require
+   [om-next-thingie.websocket :as websocket]
    [goog.dom :as gdom]
    [om.next :as om :refer-macros [defui]]
    [cljs.pprint :as pp]
