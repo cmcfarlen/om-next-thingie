@@ -119,13 +119,28 @@
     [:item/by-id id])
   static om/IQuery
   (query [_]
-    [:item/id :item/name])
+    [:item/id :item/name :item/editing?])
   Object
   (render [this]
     (println "rendering item: " (-> this om/props :item/id))
     (let [props (om/props this)
+          {:keys [item/id item/name item/editing?]} props
           {:keys [remove]} (om/get-computed this)]
-      (html [:li (str (:item/name props) "(" (:item/id props) ")")
+      (html [:li
+             (if editing?
+               (list
+                [:input {:type "text"
+                         :value name
+                         :on-change (fn [e] (om/transact! this `[(item/update {:item/name ~(.. e -target -value)})]))}]
+                [:button {:on-click (fn [_]
+                                     (println "save")
+                                     (om/transact! this `[(item/update {:item/editing? false})]))} "Save"])
+               (list
+                (str name "(" id ")!!!")
+                [:button {:on-click (fn [_]
+                                     (println "edit")
+                                     (om/transact! this `[(item/update {:item/editing? true})]))} "Edit"])
+               )
              (if remove
                [:button {:on-click remove} "Remove"])]))))
 
@@ -152,8 +167,7 @@
               (map #(item (om/computed %
                                        {:remove (fn [e]
                                                   (let [id (:item/id %)]
-                                                    (om/transact! this `[(item.set/remove-item {:item/id ~id})])))}
-                                       )) items)
+                                                    (om/transact! this `[(item.set/remove-item {:item/id ~id})])))})) items)
               [:li [:select {:ref "select"}
                     (map (fn [o] [:option {:value (:item/id o)
                                            :key (:item/id o)} (:item/name o)]) missing)]
